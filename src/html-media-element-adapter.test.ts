@@ -14,9 +14,7 @@ class FakeMediaElement extends EventTarget {
   readyState = 0;
   error: { code: number; message: string } | null = null;
   fastSeek: ((timeSeconds: number) => void) | undefined;
-  requestVideoFrameCallback:
-    | ((callback: FrameCallback) => number)
-    | undefined;
+  requestVideoFrameCallback: ((callback: FrameCallback) => number) | undefined;
   cancelVideoFrameCallback: ((handle: number) => void) | undefined;
   private frameCallback: FrameCallback | undefined;
 
@@ -77,10 +75,7 @@ describe("createHtmlMediaElementAdapter", () => {
     media.duration = 12.5;
     const adapter = createHtmlMediaElementAdapter(asMediaElement(media));
 
-    await adapter.load(
-      { type: "url", url: "/clip.webm" },
-      new AbortController().signal,
-    );
+    await adapter.load({ type: "url", url: "/clip.webm" }, new AbortController().signal);
 
     expect(media.src).toBe("/clip.webm");
     expect(adapter.getSnapshot()).toMatchObject({

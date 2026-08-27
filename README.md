@@ -22,10 +22,7 @@ It intentionally contains no timeline editor and no visual controls.
 ## Example
 
 ```ts
-import {
-  createHtmlMediaElementAdapter,
-  createMediaPlayback,
-} from "@moritzbrantner/media-playback";
+import { createHtmlMediaElementAdapter, createMediaPlayback } from "@moritzbrantner/media-playback";
 
 const video = document.querySelector("video");
 

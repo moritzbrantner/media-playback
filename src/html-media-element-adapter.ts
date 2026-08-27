@@ -188,7 +188,9 @@ function getAdapterSnapshot(
   media: HtmlMediaElementWithOptionalApis,
   presentedTimeMs: number | undefined,
 ): MediaPlaybackAdapterSnapshot {
-  const durationMs = Number.isFinite(media.duration) ? Math.max(0, media.duration * 1_000) : undefined;
+  const durationMs = Number.isFinite(media.duration)
+    ? Math.max(0, media.duration * 1_000)
+    : undefined;
 
   return {
     currentTimeMs: presentedTimeMs ?? finiteSeconds(media.currentTime) * 1_000,
@@ -232,9 +234,7 @@ function resolveSeekMode(
 function getFastSeek(media: HTMLMediaElement) {
   const candidate = (media as unknown as { fastSeek?: unknown }).fastSeek;
 
-  return typeof candidate === "function"
-    ? (candidate as (timeSeconds: number) => void)
-    : undefined;
+  return typeof candidate === "function" ? (candidate as (timeSeconds: number) => void) : undefined;
 }
 
 function clampSeekSeconds(media: HTMLMediaElement, requestedTimeSeconds: number) {

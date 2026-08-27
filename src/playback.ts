@@ -56,9 +56,7 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
     };
   };
 
-  const timedSnapshot = (
-    status: "ready" | "playing" | "ended",
-  ): MediaPlaybackSnapshot => ({
+  const timedSnapshot = (status: "ready" | "playing" | "ended"): MediaPlaybackSnapshot => ({
     status,
     ...timedFields(),
   });
@@ -252,11 +250,7 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
         activeSeekAbort = undefined;
         const nextAdapterSnapshot = adapter.getSnapshot();
         snapshot = timedSnapshot(
-          nextAdapterSnapshot.ended
-            ? "ended"
-            : nextAdapterSnapshot.paused
-              ? "ready"
-              : "playing",
+          nextAdapterSnapshot.ended ? "ended" : nextAdapterSnapshot.paused ? "ready" : "playing",
         );
         emit();
 
