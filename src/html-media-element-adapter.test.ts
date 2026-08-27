@@ -105,8 +105,11 @@ describe("createHtmlMediaElementAdapter", () => {
   });
 
   test("uses fastSeek only when explicitly requested and available", async () => {
-    const media = new FakeMediaElement({ fastSeek: true });
-    const spy = vi.spyOn(media, "fastSeek");
+    const media = new FakeMediaElement();
+    const fastSeek = vi.fn((timeSeconds: number) => {
+      media.currentTime = timeSeconds;
+    });
+    media.fastSeek = fastSeek;
     const adapter = createHtmlMediaElementAdapter(asMediaElement(media));
 
     const seek = adapter.seek({
@@ -115,7 +118,7 @@ describe("createHtmlMediaElementAdapter", () => {
       signal: new AbortController().signal,
     });
 
-    expect(spy).toHaveBeenCalledWith(2);
+    expect(fastSeek).toHaveBeenCalledWith(2);
     media.finishSeek();
 
     await expect(seek).resolves.toMatchObject({
