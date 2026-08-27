@@ -1,6 +1,5 @@
 import type {
   MediaPlaybackAdapter,
-  MediaPlaybackAdapterSeekResult,
   MediaPlaybackAdapterSnapshot,
   MediaPlaybackCapabilities,
   MediaPlaybackSource,
