@@ -1,0 +1,26 @@
+name: Bootstrap Debug
+
+on:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install
+      - name: Show canonical formatting and lockfile
+        shell: bash
+        run: |
+          bun run format
+          echo '---FORMAT-DIFF---'
+          git diff -- README.md src/html-media-element-adapter.test.ts src/html-media-element-adapter.ts src/playback.ts
+          echo '---BUN-LOCK---'
+          cat bun.lock
+          exit 1
