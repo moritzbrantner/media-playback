@@ -193,6 +193,30 @@ describe("createMediaPlayback", () => {
     expect(playback.getSnapshot().status).toBe("ready");
   });
 
+  test("reasserts a newer pause when an older play completes late", async () => {
+    const { adapter, pendingPlays } = createTestAdapter({ deferPlays: true });
+    const playback = createMediaPlayback(adapter);
+
+    await playback.load({ type: "url", url: "/clip.webm" });
+
+    const play = playback.play();
+    expect(pendingPlays).toHaveLength(1);
+
+    expect(playback.pause()).toMatchObject({
+      ok: true,
+      value: { status: "ready" },
+    });
+
+    pendingPlays[0]?.resolve();
+
+    await expect(play).resolves.toMatchObject({
+      ok: true,
+      value: { status: "ready" },
+    });
+    expect(adapter.getSnapshot().paused).toBe(true);
+    expect(playback.getSnapshot().status).toBe("ready");
+  });
+
   test("ignores a stale play failure after a newer pause intent", async () => {
     const { adapter, pendingPlays } = createTestAdapter({ deferPlays: true });
     const playback = createMediaPlayback(adapter);
