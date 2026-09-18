@@ -7,6 +7,7 @@ This repository is the headless media-playback capability.
 - Keep playback orchestration independent from timeline editing and UI presentation.
 - `src/index.ts` is the public package surface.
 - Keep browser-specific behavior behind the playback adapter seam.
+- Adapters own backend-specific buffering detection; the playback core must not infer network health or readiness heuristics.
 - Do not add demuxing, decoding, frame caches, waveform generation, or UI controls unless the task explicitly requires them.
 - Do not make publication part of ordinary feature development.
 
