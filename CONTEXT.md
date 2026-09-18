@@ -14,6 +14,6 @@
 
 ## MVP boundary
 
-The MVP owns playback, pause, rate changes, source-load lifecycle, seek lifecycle, async-operation supersession, buffering state, and clock observation. Backend adapters detect their own waiting condition; the playback core only maps that condition into stable public state. A new source load invalidates older in-flight loads and seeks, and source-scoped commands remain unavailable until the current load completes.
+The MVP owns playback, pause, rate changes, source-load lifecycle, seek lifecycle, transport-intent supersession, async-operation supersession, buffering state, and clock observation. Backend adapters detect their own waiting condition; the playback core only maps that condition into stable public state. A new source load invalidates older in-flight loads and seeks, and source-scoped commands remain unavailable until the current load completes. Play/pause intent is also latest-wins: a later pause or play prevents an older asynchronous play completion or failure from becoming authoritative.
 
 It does not own timeline editing, UI controls, media demuxing, deterministic frame decoding, frame caches, or frame-accurate reverse playback.
