@@ -13,11 +13,11 @@ It intentionally contains no timeline editor and no visual controls.
 - `createMediaPlayback(adapter)` provides the stable playback surface.
 - `createHtmlMediaElementAdapter(element)` adapts `<video>` or `<audio>`.
 - Explicit precise and fast seek modes.
-- Newer seeks supersede stale in-flight seeks.
+- Newer loads and seeks supersede stale in-flight operations.
 - Video uses `requestVideoFrameCallback` as its clock when available.
 - Audio and older video environments fall back to media-element time/events.
 - Reverse playback is rejected unless a future backend explicitly advertises support.
-- Errors and unsupported operations are returned as typed results.
+- Playback commands stay unavailable until the current source load completes.\n- Errors and unsupported operations are returned as typed results.
 
 ## Example
 
