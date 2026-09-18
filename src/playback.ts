@@ -24,8 +24,11 @@ export type MediaPlayback = {
 export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlayback {
   const listeners = new Set<(snapshot: MediaPlaybackSnapshot) => void>();
   let disposed = false;
+  let loaded = false;
   let source: MediaPlaybackSource | undefined;
+  let sourceGeneration = 0;
   let seekGeneration = 0;
+  let activeLoadAbort: AbortController | undefined;
   let activeSeekAbort: AbortController | undefined;
   let snapshot: MediaPlaybackSnapshot = {
     status: "idle",
@@ -62,7 +65,7 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
   });
 
   const refreshFromAdapter = () => {
-    if (disposed || !source || snapshot.status === "loading" || snapshot.status === "error") {
+    if (disposed || !loaded || !source || snapshot.status === "error") {
       return;
     }
 
@@ -109,6 +112,18 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
     error: { code, message },
   });
 
+  const requireLoaded = <T>(message: string): MediaPlaybackResult<T> | undefined => {
+    if (disposed) {
+      return unavailable("disposed", "Playback has been disposed.");
+    }
+
+    if (!loaded || !source) {
+      return unavailable("not-loaded", message);
+    }
+
+    return undefined;
+  };
+
   return {
     capabilities: adapter.capabilities,
 
@@ -130,8 +145,16 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
         return unavailable("disposed", "Playback has been disposed.");
       }
 
+      const generation = ++sourceGeneration;
+      loaded = false;
+
+      activeLoadAbort?.abort();
       activeSeekAbort?.abort();
+      activeSeekAbort = undefined;
       seekGeneration += 1;
+
+      const loadAbort = new AbortController();
+      activeLoadAbort = loadAbort;
       source = nextSource;
       snapshot = {
         status: "loading",
@@ -140,32 +163,72 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
       };
       emit();
 
-      const loadAbort = new AbortController();
-
       try {
-        await adapter.load(source, loadAbort.signal);
+        await adapter.load(nextSource, loadAbort.signal);
       } catch (error) {
+        if (disposed) {
+          return unavailable("disposed", "Playback has been disposed.");
+        }
+
+        if (generation !== sourceGeneration || loadAbort.signal.aborted) {
+          return { ok: true, value: snapshot };
+        }
+
+        if (activeLoadAbort === loadAbort) {
+          activeLoadAbort = undefined;
+        }
+
         return fail("load-failed", error);
       }
 
+      if (disposed) {
+        return unavailable("disposed", "Playback has been disposed.");
+      }
+
+      if (generation !== sourceGeneration) {
+        return { ok: true, value: snapshot };
+      }
+
+      if (activeLoadAbort === loadAbort) {
+        activeLoadAbort = undefined;
+      }
+
+      loaded = true;
       snapshot = timedSnapshot("ready");
       emit();
       return { ok: true, value: snapshot };
     },
 
     async play() {
-      if (disposed) {
-        return unavailable("disposed", "Playback has been disposed.");
+      const unavailableResult = requireLoaded<MediaPlaybackSnapshot>(
+        "Load a media source before starting playback.",
+      );
+      if (unavailableResult) {
+        return unavailableResult;
       }
 
-      if (!source) {
-        return unavailable("not-loaded", "Load a media source before starting playback.");
-      }
+      const generation = sourceGeneration;
 
       try {
         await adapter.play();
       } catch (error) {
+        if (disposed) {
+          return unavailable("disposed", "Playback has been disposed.");
+        }
+
+        if (generation !== sourceGeneration || !loaded) {
+          return { ok: true, value: snapshot };
+        }
+
         return fail("play-failed", error);
+      }
+
+      if (disposed) {
+        return unavailable("disposed", "Playback has been disposed.");
+      }
+
+      if (generation !== sourceGeneration || !loaded) {
+        return { ok: true, value: snapshot };
       }
 
       snapshot = timedSnapshot(adapter.getSnapshot().ended ? "ended" : "playing");
@@ -174,12 +237,11 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
     },
 
     pause() {
-      if (disposed) {
-        return unavailable("disposed", "Playback has been disposed.");
-      }
-
-      if (!source) {
-        return unavailable("not-loaded", "Load a media source before pausing playback.");
+      const unavailableResult = requireLoaded<MediaPlaybackSnapshot>(
+        "Load a media source before pausing playback.",
+      );
+      if (unavailableResult) {
+        return unavailableResult;
       }
 
       adapter.pause();
@@ -189,12 +251,11 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
     },
 
     async seek(request) {
-      if (disposed) {
-        return unavailable("disposed", "Playback has been disposed.");
-      }
-
-      if (!source) {
-        return unavailable("not-loaded", "Load a media source before seeking.");
+      const unavailableResult = requireLoaded<MediaSeekResult>(
+        "Load a media source before seeking.",
+      );
+      if (unavailableResult) {
+        return unavailableResult;
       }
 
       if (!Number.isFinite(request.timeMs)) {
@@ -218,7 +279,7 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
       const adapterSnapshot = adapter.getSnapshot();
       snapshot = {
         status: "seeking",
-        source,
+        source: source!,
         currentTimeMs: adapterSnapshot.currentTimeMs,
         ...(adapterSnapshot.durationMs === undefined
           ? {}
@@ -280,12 +341,11 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
     },
 
     setPlaybackRate(playbackRate) {
-      if (disposed) {
-        return unavailable("disposed", "Playback has been disposed.");
-      }
-
-      if (!source) {
-        return unavailable("not-loaded", "Load a media source before changing playback rate.");
+      const unavailableResult = requireLoaded<MediaPlaybackSnapshot>(
+        "Load a media source before changing playback rate.",
+      );
+      if (unavailableResult) {
+        return unavailableResult;
       }
 
       if (!Number.isFinite(playbackRate) || playbackRate === 0) {
@@ -328,7 +388,10 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
       }
 
       disposed = true;
+      loaded = false;
+      sourceGeneration += 1;
       seekGeneration += 1;
+      activeLoadAbort?.abort();
       activeSeekAbort?.abort();
       unsubscribeAdapter();
       adapter.dispose();
