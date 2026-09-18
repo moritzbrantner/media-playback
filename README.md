@@ -14,6 +14,7 @@ It intentionally contains no timeline editor and no visual controls.
 - `createHtmlMediaElementAdapter(element)` adapts `<video>` or `<audio>`.
 - Explicit precise and fast seek modes.
 - Newer loads and seeks supersede stale in-flight operations.
+- Play/pause transport intent is latest-wins, so stale asynchronous play completion cannot override a newer command.
 - Video uses `requestVideoFrameCallback` as its clock when available.
 - Audio and older video environments fall back to media-element time/events.
 - Reverse playback is rejected unless a future backend explicitly advertises support.
