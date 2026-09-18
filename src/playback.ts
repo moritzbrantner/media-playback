@@ -276,16 +276,9 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
       const seekAbort = new AbortController();
       activeSeekAbort = seekAbort;
 
-      const adapterSnapshot = adapter.getSnapshot();
       snapshot = {
         status: "seeking",
-        source: source!,
-        currentTimeMs: adapterSnapshot.currentTimeMs,
-        ...(adapterSnapshot.durationMs === undefined
-          ? {}
-          : { durationMs: adapterSnapshot.durationMs }),
-        playbackRate: adapterSnapshot.playbackRate,
-        capabilities: adapter.capabilities,
+        ...timedFields(),
         targetTimeMs: requestedTimeMs,
         seekMode: mode,
       };
