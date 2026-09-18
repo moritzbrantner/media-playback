@@ -32,6 +32,7 @@ function createTestAdapter(options: { deferLoads?: boolean } = {}) {
     durationMs: 10_000,
     paused: true,
     ended: false,
+    buffering: false,
     playbackRate: 1,
   };
 
@@ -42,7 +43,13 @@ function createTestAdapter(options: { deferLoads?: boolean } = {}) {
   };
 
   const completeLoad = () => {
-    snapshot = { ...snapshot, currentTimeMs: 0, paused: true, ended: false };
+    snapshot = {
+      ...snapshot,
+      currentTimeMs: 0,
+      paused: true,
+      ended: false,
+      buffering: false,
+    };
     notify();
   };
 
@@ -86,12 +93,12 @@ function createTestAdapter(options: { deferLoads?: boolean } = {}) {
     },
 
     async play() {
-      snapshot = { ...snapshot, paused: false };
+      snapshot = { ...snapshot, paused: false, buffering: false };
       notify();
     },
 
     pause() {
-      snapshot = { ...snapshot, paused: true };
+      snapshot = { ...snapshot, paused: true, buffering: false };
       notify();
     },
 
@@ -134,7 +141,12 @@ function createTestAdapter(options: { deferLoads?: boolean } = {}) {
     },
   };
 
-  return { adapter, pendingLoads, pendingSeeks };
+  const setBuffering = (buffering: boolean) => {
+    snapshot = { ...snapshot, buffering };
+    notify();
+  };
+
+  return { adapter, pendingLoads, pendingSeeks, setBuffering };
 }
 
 describe("createMediaPlayback", () => {
@@ -159,6 +171,29 @@ describe("createMediaPlayback", () => {
     const paused = playback.pause();
     expect(paused.ok).toBe(true);
     expect(playback.getSnapshot().status).toBe("ready");
+  });
+
+  test("distinguishes active playback from temporary buffering", async () => {
+    const { adapter, setBuffering } = createTestAdapter();
+    const playback = createMediaPlayback(adapter);
+
+    await playback.load({ type: "url", url: "/clip.webm" });
+    await playback.play();
+
+    setBuffering(true);
+    expect(playback.getSnapshot()).toMatchObject({
+      status: "buffering",
+      currentTimeMs: 0,
+    });
+
+    setBuffering(false);
+    expect(playback.getSnapshot().status).toBe("playing");
+
+    setBuffering(true);
+    expect(playback.pause()).toMatchObject({
+      ok: true,
+      value: { status: "ready" },
+    });
   });
 
   test("keeps the newest load authoritative when an older load is still in flight", async () => {

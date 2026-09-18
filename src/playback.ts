@@ -59,10 +59,23 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
     };
   };
 
-  const timedSnapshot = (status: "ready" | "playing" | "ended"): MediaPlaybackSnapshot => ({
+  const timedSnapshot = (
+    status: "ready" | "playing" | "buffering" | "ended",
+  ): MediaPlaybackSnapshot => ({
     status,
     ...timedFields(),
   });
+
+  const timedStatus = (
+    adapterSnapshot: ReturnType<MediaPlaybackAdapter["getSnapshot"]>,
+  ): "ready" | "playing" | "buffering" | "ended" =>
+    adapterSnapshot.ended
+      ? "ended"
+      : adapterSnapshot.paused
+        ? "ready"
+        : adapterSnapshot.buffering
+          ? "buffering"
+          : "playing";
 
   const refreshFromAdapter = () => {
     if (disposed || !loaded || !source || snapshot.status === "error") {
@@ -82,9 +95,7 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
       return;
     }
 
-    snapshot = timedSnapshot(
-      adapterSnapshot.ended ? "ended" : adapterSnapshot.paused ? "ready" : "playing",
-    );
+    snapshot = timedSnapshot(timedStatus(adapterSnapshot));
     emit();
   };
 
@@ -231,7 +242,7 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
         return { ok: true, value: snapshot };
       }
 
-      snapshot = timedSnapshot(adapter.getSnapshot().ended ? "ended" : "playing");
+      snapshot = timedSnapshot(timedStatus(adapter.getSnapshot()));
       emit();
       return { ok: true, value: snapshot };
     },
@@ -245,7 +256,7 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
       }
 
       adapter.pause();
-      snapshot = timedSnapshot(adapter.getSnapshot().ended ? "ended" : "ready");
+      snapshot = timedSnapshot(timedStatus(adapter.getSnapshot()));
       emit();
       return { ok: true, value: snapshot };
     },
@@ -303,9 +314,7 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
 
         activeSeekAbort = undefined;
         const nextAdapterSnapshot = adapter.getSnapshot();
-        snapshot = timedSnapshot(
-          nextAdapterSnapshot.ended ? "ended" : nextAdapterSnapshot.paused ? "ready" : "playing",
-        );
+        snapshot = timedSnapshot(timedStatus(nextAdapterSnapshot));
         emit();
 
         return {
@@ -368,9 +377,7 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
       }
 
       const adapterSnapshot = adapter.getSnapshot();
-      snapshot = timedSnapshot(
-        adapterSnapshot.ended ? "ended" : adapterSnapshot.paused ? "ready" : "playing",
-      );
+      snapshot = timedSnapshot(timedStatus(adapterSnapshot));
       emit();
       return { ok: true, value: snapshot };
     },
