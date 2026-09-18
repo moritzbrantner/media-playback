@@ -14,6 +14,11 @@ type PendingLoad = {
   resolve: () => void;
 };
 
+type PendingPlay = {
+  resolve: () => void;
+  reject: (error: Error) => void;
+};
+
 type PendingSeek = {
   request: {
     timeMs: number;
@@ -23,9 +28,10 @@ type PendingSeek = {
   resolve: (result: MediaPlaybackAdapterSeekResult) => void;
 };
 
-function createTestAdapter(options: { deferLoads?: boolean } = {}) {
+function createTestAdapter(options: { deferLoads?: boolean; deferPlays?: boolean } = {}) {
   const listeners = new Set<() => void>();
   const pendingLoads: PendingLoad[] = [];
+  const pendingPlays: PendingPlay[] = [];
   const pendingSeeks: PendingSeek[] = [];
   let snapshot: MediaPlaybackAdapterSnapshot = {
     currentTimeMs: 0,
@@ -93,8 +99,22 @@ function createTestAdapter(options: { deferLoads?: boolean } = {}) {
     },
 
     async play() {
-      snapshot = { ...snapshot, paused: false, buffering: false };
-      notify();
+      if (!options.deferPlays) {
+        snapshot = { ...snapshot, paused: false, buffering: false };
+        notify();
+        return;
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        pendingPlays.push({
+          resolve: () => {
+            snapshot = { ...snapshot, paused: false, buffering: false };
+            notify();
+            resolve();
+          },
+          reject,
+        });
+      });
     },
 
     pause() {
@@ -146,7 +166,7 @@ function createTestAdapter(options: { deferLoads?: boolean } = {}) {
     notify();
   };
 
-  return { adapter, pendingLoads, pendingSeeks, setBuffering };
+  return { adapter, pendingLoads, pendingPlays, pendingSeeks, setBuffering };
 }
 
 describe("createMediaPlayback", () => {
@@ -171,6 +191,55 @@ describe("createMediaPlayback", () => {
     const paused = playback.pause();
     expect(paused.ok).toBe(true);
     expect(playback.getSnapshot().status).toBe("ready");
+  });
+
+  test("ignores a stale play failure after a newer pause intent", async () => {
+    const { adapter, pendingPlays } = createTestAdapter({ deferPlays: true });
+    const playback = createMediaPlayback(adapter);
+
+    await playback.load({ type: "url", url: "/clip.webm" });
+
+    const play = playback.play();
+    expect(pendingPlays).toHaveLength(1);
+
+    expect(playback.pause()).toMatchObject({
+      ok: true,
+      value: { status: "ready" },
+    });
+
+    pendingPlays[0]?.reject(new Error("autoplay denied"));
+
+    await expect(play).resolves.toMatchObject({
+      ok: true,
+      value: { status: "ready" },
+    });
+    expect(playback.getSnapshot().status).toBe("ready");
+  });
+
+  test("keeps the newest play command authoritative", async () => {
+    const { adapter, pendingPlays } = createTestAdapter({ deferPlays: true });
+    const playback = createMediaPlayback(adapter);
+
+    await playback.load({ type: "url", url: "/clip.webm" });
+
+    const first = playback.play();
+    const second = playback.play();
+
+    expect(pendingPlays).toHaveLength(2);
+
+    pendingPlays[1]?.resolve();
+    await expect(second).resolves.toMatchObject({
+      ok: true,
+      value: { status: "playing" },
+    });
+
+    pendingPlays[0]?.reject(new Error("stale play failure"));
+    await expect(first).resolves.toMatchObject({
+      ok: true,
+      value: { status: "playing" },
+    });
+
+    expect(playback.getSnapshot().status).toBe("playing");
   });
 
   test("distinguishes active playback from temporary buffering", async () => {
