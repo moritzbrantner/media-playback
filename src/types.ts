@@ -62,6 +62,9 @@ export type MediaPlaybackSnapshot =
       status: "playing";
     })
   | (MediaPlaybackTimedSnapshot & {
+      status: "buffering";
+    })
+  | (MediaPlaybackTimedSnapshot & {
       status: "seeking";
       targetTimeMs: number;
       seekMode: MediaSeekMode;
@@ -98,6 +101,7 @@ export type MediaPlaybackAdapterSnapshot = {
   durationMs?: number;
   paused: boolean;
   ended: boolean;
+  buffering: boolean;
   playbackRate: number;
 };
 
