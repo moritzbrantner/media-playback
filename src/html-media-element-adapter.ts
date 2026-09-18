@@ -159,7 +159,7 @@ export function createHtmlMediaElementAdapter(element: HTMLMediaElement): MediaP
     },
 
     getSnapshot() {
-      return getAdapterSnapshot(media, presentedTimeMs);
+      return getAdapterSnapshot(media, presentedTimeMs, buffering);
     },
 
     subscribe(listener) {
@@ -208,6 +208,7 @@ export function createHtmlMediaElementAdapter(element: HTMLMediaElement): MediaP
 function getAdapterSnapshot(
   media: HtmlMediaElementWithOptionalApis,
   presentedTimeMs: number | undefined,
+  buffering: boolean,
 ): MediaPlaybackAdapterSnapshot {
   const durationMs = Number.isFinite(media.duration)
     ? Math.max(0, media.duration * 1_000)
