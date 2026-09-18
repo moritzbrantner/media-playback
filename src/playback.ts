@@ -27,6 +27,7 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
   let loaded = false;
   let source: MediaPlaybackSource | undefined;
   let sourceGeneration = 0;
+  let transportGeneration = 0;
   let seekGeneration = 0;
   let activeLoadAbort: AbortController | undefined;
   let activeSeekAbort: AbortController | undefined;
@@ -157,6 +158,7 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
       }
 
       const generation = ++sourceGeneration;
+      transportGeneration += 1;
       loaded = false;
 
       activeLoadAbort?.abort();
@@ -218,7 +220,8 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
         return unavailableResult;
       }
 
-      const generation = sourceGeneration;
+      const sourceAtStart = sourceGeneration;
+      const generation = ++transportGeneration;
 
       try {
         await adapter.play();
@@ -227,7 +230,11 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
           return unavailable("disposed", "Playback has been disposed.");
         }
 
-        if (generation !== sourceGeneration || !loaded) {
+        if (
+          sourceAtStart !== sourceGeneration ||
+          generation !== transportGeneration ||
+          !loaded
+        ) {
           return { ok: true, value: snapshot };
         }
 
@@ -238,7 +245,11 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
         return unavailable("disposed", "Playback has been disposed.");
       }
 
-      if (generation !== sourceGeneration || !loaded) {
+      if (
+        sourceAtStart !== sourceGeneration ||
+        generation !== transportGeneration ||
+        !loaded
+      ) {
         return { ok: true, value: snapshot };
       }
 
@@ -255,6 +266,7 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
         return unavailableResult;
       }
 
+      transportGeneration += 1;
       adapter.pause();
       snapshot = timedSnapshot(timedStatus(adapter.getSnapshot()));
       emit();
@@ -390,6 +402,7 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
       disposed = true;
       loaded = false;
       sourceGeneration += 1;
+      transportGeneration += 1;
       seekGeneration += 1;
       activeLoadAbort?.abort();
       activeSeekAbort?.abort();
