@@ -13,6 +13,6 @@
 
 ## MVP boundary
 
-The MVP owns playback, pause, rate changes, seek lifecycle, seek supersession, and clock observation.
+The MVP owns playback, pause, rate changes, source-load lifecycle, seek lifecycle, async-operation supersession, and clock observation. A new source load invalidates older in-flight loads and seeks, and source-scoped commands remain unavailable until the current load completes.
 
 It does not own timeline editing, UI controls, media demuxing, deterministic frame decoding, frame caches, or frame-accurate reverse playback.
