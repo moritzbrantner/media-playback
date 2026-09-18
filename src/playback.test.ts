@@ -8,6 +8,12 @@ import type {
   MediaPlaybackSource,
 } from "./types";
 
+type PendingLoad = {
+  source: MediaPlaybackSource;
+  signal: AbortSignal;
+  resolve: () => void;
+};
+
 type PendingSeek = {
   request: {
     timeMs: number;
@@ -17,8 +23,9 @@ type PendingSeek = {
   resolve: (result: MediaPlaybackAdapterSeekResult) => void;
 };
 
-function createTestAdapter() {
+function createTestAdapter(options: { deferLoads?: boolean } = {}) {
   const listeners = new Set<() => void>();
+  const pendingLoads: PendingLoad[] = [];
   const pendingSeeks: PendingSeek[] = [];
   let snapshot: MediaPlaybackAdapterSnapshot = {
     currentTimeMs: 0,
@@ -34,6 +41,11 @@ function createTestAdapter() {
     }
   };
 
+  const completeLoad = () => {
+    snapshot = { ...snapshot, currentTimeMs: 0, paused: true, ended: false };
+    notify();
+  };
+
   const adapter: MediaPlaybackAdapter = {
     capabilities: {
       preciseSeek: true,
@@ -42,9 +54,35 @@ function createTestAdapter() {
       presentedFrameClock: true,
     },
 
-    async load(_source: MediaPlaybackSource) {
-      snapshot = { ...snapshot, currentTimeMs: 0, paused: true, ended: false };
-      notify();
+    async load(source: MediaPlaybackSource, signal: AbortSignal) {
+      if (!options.deferLoads) {
+        completeLoad();
+        return;
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const handleAbort = () => {
+          signal.removeEventListener("abort", handleAbort);
+          reject(new DOMException("Superseded", "AbortError"));
+        };
+
+        signal.addEventListener("abort", handleAbort, { once: true });
+        pendingLoads.push({
+          source,
+          signal,
+          resolve: () => {
+            signal.removeEventListener("abort", handleAbort);
+
+            if (signal.aborted) {
+              reject(new DOMException("Superseded", "AbortError"));
+              return;
+            }
+
+            completeLoad();
+            resolve();
+          },
+        });
+      });
     },
 
     async play() {
@@ -96,7 +134,7 @@ function createTestAdapter() {
     },
   };
 
-  return { adapter, pendingSeeks };
+  return { adapter, pendingLoads, pendingSeeks };
 }
 
 describe("createMediaPlayback", () => {
@@ -121,6 +159,85 @@ describe("createMediaPlayback", () => {
     const paused = playback.pause();
     expect(paused.ok).toBe(true);
     expect(playback.getSnapshot().status).toBe("ready");
+  });
+
+  test("keeps the newest load authoritative when an older load is still in flight", async () => {
+    const { adapter, pendingLoads } = createTestAdapter({ deferLoads: true });
+    const playback = createMediaPlayback(adapter);
+
+    const first = playback.load({ type: "url", url: "/first.webm" });
+    const second = playback.load({ type: "url", url: "/second.webm" });
+
+    expect(pendingLoads).toHaveLength(2);
+    expect(pendingLoads[0]?.signal.aborted).toBe(true);
+
+    await expect(first).resolves.toMatchObject({
+      ok: true,
+      value: {
+        status: "loading",
+        source: { type: "url", url: "/second.webm" },
+      },
+    });
+
+    pendingLoads[1]?.resolve();
+
+    await expect(second).resolves.toMatchObject({
+      ok: true,
+      value: {
+        status: "ready",
+        source: { type: "url", url: "/second.webm" },
+      },
+    });
+    expect(playback.getSnapshot()).toMatchObject({
+      status: "ready",
+      source: { type: "url", url: "/second.webm" },
+    });
+  });
+
+  test("does not expose playback commands until the current load completes", async () => {
+    const { adapter, pendingLoads } = createTestAdapter({ deferLoads: true });
+    const playback = createMediaPlayback(adapter);
+    const loading = playback.load({ type: "url", url: "/clip.webm" });
+
+    await expect(playback.play()).resolves.toMatchObject({
+      ok: false,
+      error: { code: "not-loaded" },
+    });
+    await expect(playback.seek({ timeMs: 1_000 })).resolves.toMatchObject({
+      ok: false,
+      error: { code: "not-loaded" },
+    });
+    expect(playback.pause()).toMatchObject({
+      ok: false,
+      error: { code: "not-loaded" },
+    });
+    expect(playback.setPlaybackRate(2)).toMatchObject({
+      ok: false,
+      error: { code: "not-loaded" },
+    });
+
+    pendingLoads[0]?.resolve();
+    await loading;
+
+    await expect(playback.play()).resolves.toMatchObject({ ok: true });
+  });
+
+  test("aborts an in-flight load when playback is disposed", async () => {
+    const { adapter, pendingLoads } = createTestAdapter({ deferLoads: true });
+    const playback = createMediaPlayback(adapter);
+    const loading = playback.load({ type: "url", url: "/clip.webm" });
+
+    const signal = pendingLoads[0]?.signal;
+    playback.dispose();
+
+    expect(signal?.aborted).toBe(true);
+    await expect(loading).resolves.toEqual({
+      ok: false,
+      error: {
+        code: "disposed",
+        message: "Playback has been disposed.",
+      },
+    });
   });
 
   test("reports stale seeks as superseded instead of allowing them to win", async () => {
