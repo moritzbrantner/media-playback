@@ -28,6 +28,7 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
   let source: MediaPlaybackSource | undefined;
   let sourceGeneration = 0;
   let transportGeneration = 0;
+  let transportIntent: "paused" | "playing" = "paused";
   let seekGeneration = 0;
   let activeLoadAbort: AbortController | undefined;
   let activeSeekAbort: AbortController | undefined;
@@ -72,7 +73,7 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
   ): "ready" | "playing" | "buffering" | "ended" =>
     adapterSnapshot.ended
       ? "ended"
-      : adapterSnapshot.paused
+      : transportIntent === "paused" || adapterSnapshot.paused
         ? "ready"
         : adapterSnapshot.buffering
           ? "buffering"
@@ -159,6 +160,7 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
 
       const generation = ++sourceGeneration;
       transportGeneration += 1;
+      transportIntent = "paused";
       loaded = false;
 
       activeLoadAbort?.abort();
@@ -222,6 +224,7 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
 
       const sourceAtStart = sourceGeneration;
       const generation = ++transportGeneration;
+      transportIntent = "playing";
 
       try {
         await adapter.play();
@@ -238,6 +241,7 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
           return { ok: true, value: snapshot };
         }
 
+        transportIntent = "paused";
         return fail("play-failed", error);
       }
 
@@ -245,11 +249,17 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
         return unavailable("disposed", "Playback has been disposed.");
       }
 
-      if (
-        sourceAtStart !== sourceGeneration ||
-        generation !== transportGeneration ||
-        !loaded
-      ) {
+      if (sourceAtStart !== sourceGeneration || !loaded) {
+        return { ok: true, value: snapshot };
+      }
+
+      if (generation !== transportGeneration) {
+        if (transportIntent === "paused") {
+          adapter.pause();
+          snapshot = timedSnapshot(timedStatus(adapter.getSnapshot()));
+          emit();
+        }
+
         return { ok: true, value: snapshot };
       }
 
@@ -267,6 +277,7 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
       }
 
       transportGeneration += 1;
+      transportIntent = "paused";
       adapter.pause();
       snapshot = timedSnapshot(timedStatus(adapter.getSnapshot()));
       emit();
@@ -403,6 +414,7 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
       loaded = false;
       sourceGeneration += 1;
       transportGeneration += 1;
+      transportIntent = "paused";
       seekGeneration += 1;
       activeLoadAbort?.abort();
       activeSeekAbort?.abort();
