@@ -27,6 +27,8 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
   let loaded = false;
   let source: MediaPlaybackSource | undefined;
   let sourceGeneration = 0;
+  let transportGeneration = 0;
+  let transportIntent: "paused" | "playing" = "paused";
   let seekGeneration = 0;
   let activeLoadAbort: AbortController | undefined;
   let activeSeekAbort: AbortController | undefined;
@@ -66,16 +68,21 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
     ...timedFields(),
   });
 
+  const transportIsPaused = () => transportIntent === "paused";
+
   const timedStatus = (
     adapterSnapshot: ReturnType<MediaPlaybackAdapter["getSnapshot"]>,
-  ): "ready" | "playing" | "buffering" | "ended" =>
-    adapterSnapshot.ended
-      ? "ended"
-      : adapterSnapshot.paused
-        ? "ready"
-        : adapterSnapshot.buffering
-          ? "buffering"
-          : "playing";
+  ): "ready" | "playing" | "buffering" | "ended" => {
+    if (adapterSnapshot.ended) {
+      return "ended";
+    }
+
+    if (transportIsPaused() || adapterSnapshot.paused) {
+      return "ready";
+    }
+
+    return adapterSnapshot.buffering ? "buffering" : "playing";
+  };
 
   const refreshFromAdapter = () => {
     if (disposed || !loaded || !source || snapshot.status === "error") {
@@ -157,6 +164,8 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
       }
 
       const generation = ++sourceGeneration;
+      transportGeneration += 1;
+      transportIntent = "paused";
       loaded = false;
 
       activeLoadAbort?.abort();
@@ -218,7 +227,9 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
         return unavailableResult;
       }
 
-      const generation = sourceGeneration;
+      const sourceAtStart = sourceGeneration;
+      const generation = ++transportGeneration;
+      transportIntent = "playing";
 
       try {
         await adapter.play();
@@ -227,10 +238,14 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
           return unavailable("disposed", "Playback has been disposed.");
         }
 
-        if (generation !== sourceGeneration || !loaded) {
+        const staleSource = sourceAtStart !== sourceGeneration || !loaded;
+        const staleTransport = generation !== transportGeneration;
+
+        if (staleSource || staleTransport) {
           return { ok: true, value: snapshot };
         }
 
+        transportIntent = "paused";
         return fail("play-failed", error);
       }
 
@@ -238,7 +253,17 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
         return unavailable("disposed", "Playback has been disposed.");
       }
 
-      if (generation !== sourceGeneration || !loaded) {
+      if (sourceAtStart !== sourceGeneration || !loaded) {
+        return { ok: true, value: snapshot };
+      }
+
+      if (generation !== transportGeneration) {
+        if (transportIsPaused()) {
+          adapter.pause();
+          snapshot = timedSnapshot(timedStatus(adapter.getSnapshot()));
+          emit();
+        }
+
         return { ok: true, value: snapshot };
       }
 
@@ -255,6 +280,8 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
         return unavailableResult;
       }
 
+      transportGeneration += 1;
+      transportIntent = "paused";
       adapter.pause();
       snapshot = timedSnapshot(timedStatus(adapter.getSnapshot()));
       emit();
@@ -390,6 +417,8 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
       disposed = true;
       loaded = false;
       sourceGeneration += 1;
+      transportGeneration += 1;
+      transportIntent = "paused";
       seekGeneration += 1;
       activeLoadAbort?.abort();
       activeSeekAbort?.abort();
