@@ -68,6 +68,8 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
     ...timedFields(),
   });
 
+  const transportIsPaused = () => transportIntent === "paused";
+
   const timedStatus = (
     adapterSnapshot: ReturnType<MediaPlaybackAdapter["getSnapshot"]>,
   ): "ready" | "playing" | "buffering" | "ended" => {
@@ -75,7 +77,7 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
       return "ended";
     }
 
-    if (transportIntent === "paused" || adapterSnapshot.paused) {
+    if (transportIsPaused() || adapterSnapshot.paused) {
       return "ready";
     }
 
@@ -256,7 +258,7 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
       }
 
       if (generation !== transportGeneration) {
-        if (transportIntent === "paused") {
+        if (transportIsPaused()) {
           adapter.pause();
           snapshot = timedSnapshot(timedStatus(adapter.getSnapshot()));
           emit();
