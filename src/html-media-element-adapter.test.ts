@@ -58,6 +58,18 @@ class FakeMediaElement extends EventTarget {
     this.dispatchEvent(new Event("seeked"));
   }
 
+  waitForData() {
+    this.dispatchEvent(new Event("waiting"));
+  }
+
+  resumeAfterBuffering() {
+    this.dispatchEvent(new Event("playing"));
+  }
+
+  stallNetwork() {
+    this.dispatchEvent(new Event("stalled"));
+  }
+
   presentFrame(mediaTime: number) {
     const callback = this.frameCallback;
     this.frameCallback = undefined;
@@ -82,6 +94,7 @@ describe("createHtmlMediaElementAdapter", () => {
       durationMs: 12_500,
       currentTimeMs: 0,
       paused: true,
+      buffering: false,
     });
   });
 
@@ -124,6 +137,33 @@ describe("createHtmlMediaElementAdapter", () => {
     await expect(seek).resolves.toMatchObject({
       actualTimeMs: 2_000,
       modeUsed: "fast",
+    });
+  });
+
+  test("reports buffering only when playback is actually waiting for data", async () => {
+    const media = new FakeMediaElement();
+    const adapter = createHtmlMediaElementAdapter(asMediaElement(media));
+
+    await adapter.load({ type: "url", url: "/clip.webm" }, new AbortController().signal);
+    await adapter.play();
+
+    media.stallNetwork();
+    expect(adapter.getSnapshot().buffering).toBe(false);
+
+    media.waitForData();
+    expect(adapter.getSnapshot()).toMatchObject({
+      paused: false,
+      buffering: true,
+    });
+
+    media.resumeAfterBuffering();
+    expect(adapter.getSnapshot().buffering).toBe(false);
+
+    media.waitForData();
+    media.pause();
+    expect(adapter.getSnapshot()).toMatchObject({
+      paused: true,
+      buffering: false,
     });
   });
 
