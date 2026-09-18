@@ -70,14 +70,17 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
 
   const timedStatus = (
     adapterSnapshot: ReturnType<MediaPlaybackAdapter["getSnapshot"]>,
-  ): "ready" | "playing" | "buffering" | "ended" =>
-    adapterSnapshot.ended
-      ? "ended"
-      : transportIntent === "paused" || adapterSnapshot.paused
-        ? "ready"
-        : adapterSnapshot.buffering
-          ? "buffering"
-          : "playing";
+  ): "ready" | "playing" | "buffering" | "ended" => {
+    if (adapterSnapshot.ended) {
+      return "ended";
+    }
+
+    if (transportIntent === "paused" || adapterSnapshot.paused) {
+      return "ready";
+    }
+
+    return adapterSnapshot.buffering ? "buffering" : "playing";
+  };
 
   const refreshFromAdapter = () => {
     if (disposed || !loaded || !source || snapshot.status === "error") {
@@ -233,11 +236,10 @@ export function createMediaPlayback(adapter: MediaPlaybackAdapter): MediaPlaybac
           return unavailable("disposed", "Playback has been disposed.");
         }
 
-        if (
-          sourceAtStart !== sourceGeneration ||
-          generation !== transportGeneration ||
-          !loaded
-        ) {
+        const staleSource = sourceAtStart !== sourceGeneration || !loaded;
+        const staleTransport = generation !== transportGeneration;
+
+        if (staleSource || staleTransport) {
           return { ok: true, value: snapshot };
         }
 
