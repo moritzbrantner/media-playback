@@ -30,6 +30,7 @@ export function createHtmlMediaElementAdapter(element: HTMLMediaElement): MediaP
     presentedFrameClock: typeof media.requestVideoFrameCallback === "function",
   };
   let disposed = false;
+  let buffering = false;
   let presentedTimeMs: number | undefined;
   let videoFrameHandle: number | undefined;
 
@@ -39,27 +40,43 @@ export function createHtmlMediaElementAdapter(element: HTMLMediaElement): MediaP
     }
   };
 
-  const clearPresentedTime = () => {
+  const clearTransientState = () => {
+    buffering = false;
     presentedTimeMs = undefined;
     notify();
   };
 
-  const notifyEvents = [
-    "loadedmetadata",
-    "durationchange",
-    "timeupdate",
-    "playing",
-    "pause",
-    "ended",
-    "seeked",
-  ] as const;
+  const handleWaiting = () => {
+    if (media.paused || media.ended) {
+      return;
+    }
+
+    buffering = true;
+    notify();
+  };
+
+  const handlePlaying = () => {
+    buffering = false;
+    notify();
+  };
+
+  const handlePauseOrEnded = () => {
+    buffering = false;
+    notify();
+  };
+
+  const notifyEvents = ["loadedmetadata", "durationchange", "timeupdate", "seeked"] as const;
 
   for (const eventName of notifyEvents) {
     media.addEventListener(eventName, notify);
   }
 
-  media.addEventListener("seeking", clearPresentedTime);
-  media.addEventListener("emptied", clearPresentedTime);
+  media.addEventListener("waiting", handleWaiting);
+  media.addEventListener("playing", handlePlaying);
+  media.addEventListener("pause", handlePauseOrEnded);
+  media.addEventListener("ended", handlePauseOrEnded);
+  media.addEventListener("seeking", clearTransientState);
+  media.addEventListener("emptied", clearTransientState);
 
   const schedulePresentedFrame = () => {
     if (
@@ -84,6 +101,7 @@ export function createHtmlMediaElementAdapter(element: HTMLMediaElement): MediaP
 
     async load(source, signal) {
       assertActive(disposed);
+      buffering = false;
       presentedTimeMs = undefined;
       media.src = getSourceUrl(source);
       media.load();
@@ -170,8 +188,12 @@ export function createHtmlMediaElementAdapter(element: HTMLMediaElement): MediaP
         media.removeEventListener(eventName, notify);
       }
 
-      media.removeEventListener("seeking", clearPresentedTime);
-      media.removeEventListener("emptied", clearPresentedTime);
+      media.removeEventListener("waiting", handleWaiting);
+      media.removeEventListener("playing", handlePlaying);
+      media.removeEventListener("pause", handlePauseOrEnded);
+      media.removeEventListener("ended", handlePauseOrEnded);
+      media.removeEventListener("seeking", clearTransientState);
+      media.removeEventListener("emptied", clearTransientState);
 
       if (videoFrameHandle !== undefined) {
         media.cancelVideoFrameCallback?.(videoFrameHandle);
@@ -196,6 +218,7 @@ function getAdapterSnapshot(
     ...(durationMs === undefined ? {} : { durationMs }),
     paused: media.paused,
     ended: media.ended,
+    buffering: !media.paused && !media.ended && buffering,
     playbackRate: media.playbackRate,
   };
 }
