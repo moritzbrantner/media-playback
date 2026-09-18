@@ -17,7 +17,9 @@ It intentionally contains no timeline editor and no visual controls.
 - Video uses `requestVideoFrameCallback` as its clock when available.
 - Audio and older video environments fall back to media-element time/events.
 - Reverse playback is rejected unless a future backend explicitly advertises support.
-- Playback commands stay unavailable until the current source load completes.\n- Errors and unsupported operations are returned as typed results.
+- Playback commands stay unavailable until the current source load completes.
+- Buffering is explicit: play intent remains active while the backend is temporarily unable to advance.
+- Errors and unsupported operations are returned as typed results.
 
 ## Example
 
