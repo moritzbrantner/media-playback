@@ -1,5 +1,5 @@
-export { createHtmlMediaElementAdapter } from "./html-media-element-adapter";
-export { createMediaPlayback, type MediaPlayback } from "./playback";
+export { createHtmlMediaElementAdapter } from "./html-media-element-adapter.js";
+export { createMediaPlayback, type MediaPlayback } from "./playback.js";
 export type {
   MediaPlaybackAdapter,
   MediaPlaybackAdapterSeekResult,
@@ -13,4 +13,4 @@ export type {
   MediaSeekMode,
   MediaSeekRequest,
   MediaSeekResult,
-} from "./types";
+} from "./types.js";

@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { createHtmlMediaElementAdapter } from "./html-media-element-adapter";
+import { createHtmlMediaElementAdapter } from "./html-media-element-adapter.js";
 
 type FrameCallback = (now: number, metadata: { mediaTime: number }) => void;
 

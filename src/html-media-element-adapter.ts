@@ -4,7 +4,7 @@ import type {
   MediaPlaybackCapabilities,
   MediaPlaybackSource,
   MediaSeekMode,
-} from "./types";
+} from "./types.js";
 
 type VideoFrameMetadataLike = {
   mediaTime: number;
