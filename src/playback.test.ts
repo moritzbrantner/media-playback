@@ -1,12 +1,12 @@
 import { describe, expect, test } from "vitest";
 
-import { createMediaPlayback } from "./playback";
+import { createMediaPlayback } from "./playback.js";
 import type {
   MediaPlaybackAdapter,
   MediaPlaybackAdapterSeekResult,
   MediaPlaybackAdapterSnapshot,
   MediaPlaybackSource,
-} from "./types";
+} from "./types.js";
 
 type PendingLoad = {
   source: MediaPlaybackSource;

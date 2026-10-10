@@ -7,7 +7,7 @@ import type {
   MediaPlaybackSource,
   MediaSeekRequest,
   MediaSeekResult,
-} from "./types";
+} from "./types.js";
 
 export type MediaPlayback = {
   readonly capabilities: MediaPlaybackAdapter["capabilities"];

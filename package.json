@@ -18,7 +18,7 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --clean --out-dir dist",
+    "build": "tsup src/index.ts --format esm --clean --out-dir dist && tsc -p tsconfig.build.json",
     "check-types": "tsc --noEmit",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
@@ -30,7 +30,7 @@
     "oxfmt": "0.72.0",
     "oxlint": "1.87.0",
     "tsup": "8.5.1",
-    "typescript": "6.0.3",
+    "typescript": "7.0.2",
     "vitest": "5.0.3"
   }
 }
